@@ -1,0 +1,23 @@
+{
+  "name": "streamz-playwright-practice",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Streamz — a small streaming media-player web app (frontend + zero-dependency Node backend) built as a practice target for Playwright UI / API / Integration automation.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "npm run test:node",
+    "test:node": "node --test \"tests/**/*.test.js\"",
+    "test:unit": "node --test \"tests/unit/**/*.test.js\"",
+    "test:api": "node --test \"tests/api/**/*.test.js\"",
+    "test:integration": "node --test \"tests/integration/**/*.test.js\"",
+    "test:smoke": "node --test \"tests/smoke/**/*.test.js\"",
+    "test:e2e": "playwright test"
+  },
+  "engines": {
+    "node": ">=18.19"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
