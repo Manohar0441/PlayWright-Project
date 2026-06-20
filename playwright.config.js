@@ -52,12 +52,17 @@ module.exports = defineConfig({
   },
 
   // One project per test level. They all inherit the artifact settings above.
+  // The non-UI levels stay on Chromium (the engine doesn't matter for API/unit).
+  // E2E runs on all three engines, since UI behaviour is what's worth checking
+  // cross-browser. `e2e` = Chromium so `--project=e2e` keeps working as before.
   projects: [
     { name: 'unit',        testDir: './tests/unit' },
     { name: 'api',         testDir: './tests/api' },
     { name: 'integration', testDir: './tests/integration' },
     { name: 'smoke',       testDir: './tests/smoke' },
-    { name: 'e2e',         testDir: './tests/e2e' },
+    { name: 'e2e',         testDir: './tests/e2e', use: { ...devices['Desktop Chrome'] } },
+    { name: 'e2e-firefox', testDir: './tests/e2e', use: { ...devices['Desktop Firefox'] } },
+    { name: 'e2e-webkit',  testDir: './tests/e2e', use: { ...devices['Desktop Safari'] } },
   ],
 
   webServer: startAppLocally
