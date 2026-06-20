@@ -1,22 +1,3 @@
-/* ============================================================================
-   Jenkinsfile — Streamz CI/CD
-   ----------------------------------------------------------------------------
-   Flow (as requested):  GitHub push -> Build -> Test -> Execute (deploy)
-   If the deploy fails its health check, auto-roll-back to the previous image.
-
-   Requirements on the Jenkins agent:
-     - Docker CLI available (the agent can run `docker ...`)
-     - bash (the deploy/rollback scripts use it)
-     - Internet access to pull node + Playwright base images
-   The provided jenkins/ Docker setup gives you all of this. See jenkins/README.md.
-
-   Triggers (both declared below):
-     - githubPush()  fires on a GitHub push IF Jenkins is reachable by the webhook
-                     (needs a public URL — e.g. smee.io/ngrok for a local Jenkins).
-     - pollSCM       a local-friendly fallback: Jenkins checks the repo for new
-                     commits on a schedule, so a push still triggers a build even
-                     when GitHub can't reach your laptop.
-   ============================================================================ */
 
 pipeline {
   agent any
@@ -35,7 +16,7 @@ pipeline {
     TEST_IMAGE   = 'streamz-tests'
     TAG          = "build-${env.BUILD_NUMBER}"
     CONTAINER    = 'streamz'
-    PORT         = '3000'
+    PORT         = '3001'   // host port for the deployed app (3000 is taken by a local dev server)
     E2E_APP      = 'streamz-e2e'
     E2E_NET      = 'streamz-e2e-net'
     TEST_RUNNER  = "streamz-tests-${env.BUILD_NUMBER}"

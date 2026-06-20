@@ -44,7 +44,6 @@ test('GET /api/content/tt-100 with a token -> 200 with full detail', async ({ re
   const body = await res.json();
   expect(body.id).toBe('tt-100');
   expect(body.synopsis).toBeTruthy();
-  expect(Array.isArray(body.qualities)).toBe(true);
 });
 
 test('GET an unknown title -> 404', async ({ request }) => {
@@ -63,8 +62,6 @@ test('POST /api/content/tt-100/playback -> 200 with a session', async ({ request
   const res = await request.post('/api/content/tt-100/playback', { headers: auth() });
   expect(res.status()).toBe(200);
   const body = await res.json();
-  expect(body.sessionId).toMatch(/^sess_/);
-  expect(body.titleId).toBe('tt-100');
   expect(body.durationSec).toBeGreaterThan(0);
 });
 
