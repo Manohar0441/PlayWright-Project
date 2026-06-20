@@ -1,12 +1,4 @@
-#!/usr/bin/env bash
-# ============================================================================
-# rollback.sh  —  restore the previous deployment.
-# ----------------------------------------------------------------------------
-# Called by Jenkins when the deploy step fails its health check. It re-runs the
-# image saved as `streamz:previous` and waits for it to report healthy. If there
-# is no previous image (e.g. the very first deploy), it exits 1 — there is
-# nothing to fall back to, which is itself useful information.
-# ============================================================================
+
 set -euo pipefail
 
 NAME="${CONTAINER:-streamz}"
@@ -29,6 +21,5 @@ for i in $(seq 1 60); do
     *)         sleep 1 ;;
   esac
 done
-
 echo "    rollback timed out waiting for health  [X]"
 exit 1
