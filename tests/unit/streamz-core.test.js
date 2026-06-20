@@ -1,16 +1,14 @@
 /* ============================================================================
-   UNIT TESTS — lib/streamz-core.js
+   UNIT TESTS — lib/streamz-core.js  (Playwright runner)
    ----------------------------------------------------------------------------
-   The fastest level of the pyramid: call a pure function, assert its return.
-   No server, no network, no browser. Run with Node's built-in test runner:
+   The fastest level: call a pure function, assert its return — no server, no
+   network. These run on the Playwright runner like every other level, so they
+   produce the same screenshot / video / trace artifacts.
 
-       npm run test:unit       (or: node --test tests/unit)
+       npm run test:unit       (or: npx playwright test --project=unit)
    ============================================================================ */
 
-'use strict';
-
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
+const { test, expect } = require('../fixtures');
 
 const {
   publicUser,
@@ -21,7 +19,6 @@ const {
   parseBearer,
 } = require('../../lib/streamz-core');
 
-/* A couple of tiny fixtures so each test reads clearly. */
 const SAMPLE_USER = { id: 'u_qa', email: 'qa@streamz.test', password: 'Test@123', name: 'Quinn Tester' };
 const TITLES = [
   { id: 'tt-1', title: 'The Last Render', genres: ['Sci-Fi', 'Thriller'], durationSec: 142, available: true },
@@ -29,81 +26,75 @@ const TITLES = [
   { id: 'tt-9', title: 'Rights Expired', genres: ['Mystery'], durationSec: 110, available: false },
 ];
 
-/* ---- publicUser ----------------------------------------------------------- */
 test('publicUser strips the password', () => {
   const u = publicUser(SAMPLE_USER);
-  assert.deepEqual(u, { id: 'u_qa', email: 'qa@streamz.test', name: 'Quinn Tester' });
-  assert.equal(u.password, undefined);
+  expect(u).toEqual({ id: 'u_qa', email: 'qa@streamz.test', name: 'Quinn Tester' });
+  expect(u.password).toBeUndefined();
 });
 
-/* ---- catalogCard ---------------------------------------------------------- */
 test('catalogCard keeps card fields and drops synopsis', () => {
   const card = catalogCard({ ...TITLES[0], synopsis: 'secret', captions: true, poster: { bg: '#000' } });
-  assert.equal(card.id, 'tt-1');
-  assert.equal(card.synopsis, undefined);
-  assert.equal(card.captions, true);
+  expect(card.id).toBe('tt-1');
+  expect(card.synopsis).toBeUndefined();
+  expect(card.captions).toBe(true);
 });
 
-/* ---- filterTitles --------------------------------------------------------- */
 test('filterTitles returns everything when no filters are given', () => {
-  assert.equal(filterTitles(TITLES).length, 3);
+  expect(filterTitles(TITLES)).toHaveLength(3);
 });
 
 test('filterTitles matches title text case-insensitively', () => {
   const out = filterTitles(TITLES, { search: 'pipeline' });
-  assert.equal(out.length, 1);
-  assert.equal(out[0].id, 'tt-2');
+  expect(out).toHaveLength(1);
+  expect(out[0].id).toBe('tt-2');
 });
 
 test('filterTitles matches by genre', () => {
   const out = filterTitles(TITLES, { genre: 'sci-fi' });
-  assert.equal(out.length, 1);
-  assert.equal(out[0].id, 'tt-1');
+  expect(out).toHaveLength(1);
+  expect(out[0].id).toBe('tt-1');
 });
 
 test('filterTitles does not mutate the input array', () => {
   const copy = TITLES.slice();
   filterTitles(TITLES, { search: 'render' });
-  assert.deepEqual(TITLES, copy);
+  expect(TITLES).toEqual(copy);
 });
 
-/* ---- resolveTitleAccess --------------------------------------------------- */
 test('resolveTitleAccess allows an available title', () => {
   const gate = resolveTitleAccess(TITLES, 'tt-1');
-  assert.equal(gate.status, undefined);
-  assert.equal(gate.title.id, 'tt-1');
+  expect(gate.status).toBeUndefined();
+  expect(gate.title.id).toBe('tt-1');
 });
 
 test('resolveTitleAccess returns 404 for an unknown id', () => {
-  assert.equal(resolveTitleAccess(TITLES, 'tt-zzz').status, 404);
+  expect(resolveTitleAccess(TITLES, 'tt-zzz').status).toBe(404);
 });
 
 test('resolveTitleAccess returns 451 for an unavailable title', () => {
-  assert.equal(resolveTitleAccess(TITLES, 'tt-9').status, 451);
+  expect(resolveTitleAccess(TITLES, 'tt-9').status).toBe(451);
 });
 
-/* ---- validatePosition ----------------------------------------------------- */
 test('validatePosition accepts an in-range number and rounds it', () => {
   const r = validatePosition(42.7, 142);
-  assert.equal(r.ok, true);
-  assert.equal(r.value, 43);
+  expect(r.ok).toBe(true);
+  expect(r.value).toBe(43);
 });
 
 test('validatePosition rejects negatives, overflow, and non-numbers', () => {
-  assert.equal(validatePosition(-1, 142).ok, false);
-  assert.equal(validatePosition(999, 142).ok, false);
-  assert.equal(validatePosition('30', 142).ok, false);
-  assert.equal(validatePosition(NaN, 142).ok, false);
+  expect(validatePosition(-1, 142).ok).toBe(false);
+  expect(validatePosition(999, 142).ok).toBe(false);
+  expect(validatePosition('30', 142).ok).toBe(false);
+  expect(validatePosition(NaN, 142).ok).toBe(false);
 });
 
-/* ---- parseBearer ---------------------------------------------------------- */
 test('parseBearer extracts the token', () => {
-  assert.equal(parseBearer('Bearer abc123'), 'abc123');
-  assert.equal(parseBearer('bearer  spaced '), 'spaced');
+  expect(parseBearer('Bearer abc123')).toBe('abc123');
+  expect(parseBearer('bearer  spaced ')).toBe('spaced');
 });
 
 test('parseBearer returns null for missing or malformed headers', () => {
-  assert.equal(parseBearer(undefined), null);
-  assert.equal(parseBearer(''), null);
-  assert.equal(parseBearer('Basic abc'), null);
+  expect(parseBearer(undefined)).toBeNull();
+  expect(parseBearer('')).toBeNull();
+  expect(parseBearer('Basic abc')).toBeNull();
 });

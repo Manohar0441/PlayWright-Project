@@ -1,47 +1,37 @@
 /* ============================================================================
    SMOKE TESTS — "is the app even alive?"
    ----------------------------------------------------------------------------
-   A tiny, fast set of checks you run FIRST (and right after a deploy) to confirm
-   the most critical paths work before spending time on the full suite. If smoke
-   fails, nothing else is worth running.
+   A tiny, fast set you run FIRST (and right after a deploy) to confirm the most
+   critical paths work before spending time on the full suite. Mixes `request`
+   (API) and `page` (UI) checks.
 
-       npm run test:smoke      (or: node --test tests/smoke)
+       npm run test:smoke      (or: npx playwright test --project=smoke)
    ============================================================================ */
 
-'use strict';
+const { test, expect } = require('../fixtures');
 
-const { test, before, after } = require('node:test');
-const assert = require('node:assert/strict');
-const { startTestServer } = require('../helpers/server');
-
-let app;
-before(async () => { app = await startTestServer(); });
-after(async () => { await app.close(); });
-
-test('smoke: health endpoint is up', async () => {
-  const res = await fetch(`${app.baseURL}/api/health`);
-  assert.equal(res.status, 200);
-  assert.equal((await res.json()).status, 'ok');
+test('smoke: health endpoint is up', async ({ request }) => {
+  const res = await request.get('/api/health');
+  expect(res.status()).toBe(200);
+  expect((await res.json()).status).toBe('ok');
 });
 
-test('smoke: the catalog loads', async () => {
-  const res = await fetch(`${app.baseURL}/api/content`);
-  assert.equal(res.status, 200);
-  assert.ok((await res.json()).count > 0);
+test('smoke: the catalog loads', async ({ request }) => {
+  const res = await request.get('/api/content');
+  expect(res.status()).toBe(200);
+  expect((await res.json()).count).toBeGreaterThan(0);
 });
 
-test('smoke: a user can log in', async () => {
-  const res = await fetch(`${app.baseURL}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'qa@streamz.test', password: 'Test@123' }),
+test('smoke: a user can log in', async ({ request }) => {
+  const res = await request.post('/api/auth/login', {
+    data: { email: 'qa@streamz.test', password: 'Test@123' },
   });
-  assert.equal(res.status, 200);
-  assert.ok((await res.json()).token);
+  expect(res.status()).toBe(200);
+  expect((await res.json()).token).toBeTruthy();
 });
 
-test('smoke: the login page is served', async () => {
-  const res = await fetch(`${app.baseURL}/login.html`);
-  assert.equal(res.status, 200);
-  assert.match(await res.text(), /Sign in/);
+test('smoke: the login page renders', async ({ page }) => {
+  // The autouse fixture already navigated to '/', which redirects to the login page.
+  await expect(page).toHaveURL(/login\.html/);
+  await expect(page.getByTestId('login-form')).toBeVisible();
 });

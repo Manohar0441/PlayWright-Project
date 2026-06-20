@@ -1,110 +1,94 @@
 /* ============================================================================
-   API TESTS — Catalog, title detail, playback and progress
+   API TESTS — Catalog, title detail, playback, progress
    ----------------------------------------------------------------------------
-   Covers the public browse endpoint plus the protected per-title routes and
-   their negative cases (401 / 404 / 451 / 400).
+   Uses the Playwright `request` fixture. A `beforeEach` logs in once per test
+   and stashes the bearer token for the protected routes.
 
-       npm run test:api        (or: node --test tests/api)
+       npm run test:api        (or: npx playwright test --project=api)
    ============================================================================ */
 
-'use strict';
+const { test, expect } = require('../fixtures');
 
-const { test, before, after } = require('node:test');
-const assert = require('node:assert/strict');
-const { startTestServer, loginAndGetToken } = require('../helpers/server');
-
-let app;
 let token;
-before(async () => {
-  app = await startTestServer();
-  token = await loginAndGetToken(app.baseURL);
+test.beforeEach(async ({ request }) => {
+  const res = await request.post('/api/auth/login', {
+    data: { email: 'qa@streamz.test', password: 'Test@123' },
+  });
+  token = (await res.json()).token;
 });
-after(async () => { await app.close(); });
 
 const auth = () => ({ Authorization: `Bearer ${token}` });
 
-/* ---- public catalog ------------------------------------------------------- */
-test('GET /api/content is public and returns titles', async () => {
-  const res = await fetch(`${app.baseURL}/api/content`);
-  assert.equal(res.status, 200);
+test('GET /api/content is public and returns titles', async ({ request }) => {
+  const res = await request.get('/api/content');
+  expect(res.status()).toBe(200);
   const body = await res.json();
-  assert.ok(body.count > 0);
-  assert.equal(body.items.length, body.count);
+  expect(body.count).toBeGreaterThan(0);
+  expect(body.items).toHaveLength(body.count);
 });
 
-test('GET /api/content?search=pipeline filters the list', async () => {
-  const res = await fetch(`${app.baseURL}/api/content?search=pipeline`);
+test('GET /api/content?search=pipeline filters the list', async ({ request }) => {
+  const body = await (await request.get('/api/content?search=pipeline')).json();
+  expect(body.count).toBe(1);
+  expect(body.items[0].id).toBe('tt-101');
+});
+
+test('GET /api/content/:id without a token -> 401', async ({ request }) => {
+  const res = await request.get('/api/content/tt-100');
+  expect(res.status()).toBe(401);
+});
+
+test('GET /api/content/tt-100 with a token -> 200 with full detail', async ({ request }) => {
+  const res = await request.get('/api/content/tt-100', { headers: auth() });
+  expect(res.status()).toBe(200);
   const body = await res.json();
-  assert.equal(body.count, 1);
-  assert.equal(body.items[0].id, 'tt-101');
+  expect(body.id).toBe('tt-100');
+  expect(body.synopsis).toBeTruthy();
+  expect(Array.isArray(body.qualities)).toBe(true);
 });
 
-/* ---- title detail + access rules ------------------------------------------ */
-test('GET /api/content/:id without a token -> 401', async () => {
-  const res = await fetch(`${app.baseURL}/api/content/tt-100`);
-  assert.equal(res.status, 401);
+test('GET an unknown title -> 404', async ({ request }) => {
+  const res = await request.get('/api/content/tt-zzz', { headers: auth() });
+  expect(res.status()).toBe(404);
+  expect((await res.json()).error.code).toBe('NOT_FOUND');
 });
 
-test('GET /api/content/tt-100 with a token -> 200 with full detail', async () => {
-  const res = await fetch(`${app.baseURL}/api/content/tt-100`, { headers: auth() });
-  assert.equal(res.status, 200);
+test('GET an unavailable title (tt-900) -> 451', async ({ request }) => {
+  const res = await request.get('/api/content/tt-900', { headers: auth() });
+  expect(res.status()).toBe(451);
+  expect((await res.json()).error.code).toBe('UNAVAILABLE');
+});
+
+test('POST /api/content/tt-100/playback -> 200 with a session', async ({ request }) => {
+  const res = await request.post('/api/content/tt-100/playback', { headers: auth() });
+  expect(res.status()).toBe(200);
   const body = await res.json();
-  assert.equal(body.id, 'tt-100');
-  assert.ok(body.synopsis, 'detail view includes synopsis');
-  assert.ok(Array.isArray(body.qualities));
+  expect(body.sessionId).toMatch(/^sess_/);
+  expect(body.titleId).toBe('tt-100');
+  expect(body.durationSec).toBeGreaterThan(0);
 });
 
-test('GET an unknown title -> 404', async () => {
-  const res = await fetch(`${app.baseURL}/api/content/tt-zzz`, { headers: auth() });
-  assert.equal(res.status, 404);
-  assert.equal((await res.json()).error.code, 'NOT_FOUND');
-});
-
-test('GET an unavailable title (tt-900) -> 451', async () => {
-  const res = await fetch(`${app.baseURL}/api/content/tt-900`, { headers: auth() });
-  assert.equal(res.status, 451);
-  assert.equal((await res.json()).error.code, 'UNAVAILABLE');
-});
-
-/* ---- playback ------------------------------------------------------------- */
-test('POST /api/content/tt-100/playback -> 200 with a session', async () => {
-  const res = await fetch(`${app.baseURL}/api/content/tt-100/playback`, {
-    method: 'POST',
+test('POST progress with an out-of-range position -> 400', async ({ request }) => {
+  const res = await request.post('/api/content/tt-100/progress', {
     headers: auth(),
+    data: { positionSec: 999999 },
   });
-  assert.equal(res.status, 200);
-  const body = await res.json();
-  assert.match(body.sessionId, /^sess_/);
-  assert.equal(body.titleId, 'tt-100');
-  assert.ok(body.durationSec > 0);
+  expect(res.status()).toBe(400);
+  expect((await res.json()).error.code).toBe('INVALID_POSITION');
 });
 
-/* ---- progress validation -------------------------------------------------- */
-test('POST progress with an out-of-range position -> 400', async () => {
-  const res = await fetch(`${app.baseURL}/api/content/tt-100/progress`, {
-    method: 'POST',
-    headers: { ...auth(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ positionSec: 999999 }),
+test('POST then GET progress round-trips the saved position', async ({ request }) => {
+  const save = await request.post('/api/content/tt-103/progress', {
+    headers: auth(),
+    data: { positionSec: 30 },
   });
-  assert.equal(res.status, 400);
-  assert.equal((await res.json()).error.code, 'INVALID_POSITION');
+  expect(save.status()).toBe(200);
+
+  const body = await (await request.get('/api/content/tt-103/progress', { headers: auth() })).json();
+  expect(body.positionSec).toBe(30);
 });
 
-test('POST then GET progress round-trips the saved position', async () => {
-  const save = await fetch(`${app.baseURL}/api/content/tt-100/progress`, {
-    method: 'POST',
-    headers: { ...auth(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ positionSec: 30 }),
-  });
-  assert.equal(save.status, 200);
-
-  const get = await fetch(`${app.baseURL}/api/content/tt-100/progress`, { headers: auth() });
-  const body = await get.json();
-  assert.equal(body.positionSec, 30);
-});
-
-/* ---- deliberate 5xx ------------------------------------------------------- */
-test('GET /api/debug/error -> 500 (5xx handling)', async () => {
-  const res = await fetch(`${app.baseURL}/api/debug/error`);
-  assert.equal(res.status, 500);
+test('GET /api/debug/error -> 500 (5xx handling)', async ({ request }) => {
+  const res = await request.get('/api/debug/error');
+  expect(res.status()).toBe(500);
 });

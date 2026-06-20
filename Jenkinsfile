@@ -6,33 +6,39 @@
 
    Requirements on the Jenkins agent:
      - Docker CLI available (the agent can run `docker ...`)
-     - bash + curl (the deploy/rollback scripts use them)
+     - bash (the deploy/rollback scripts use it)
      - Internet access to pull node + Playwright base images
+   The provided jenkins/ Docker setup gives you all of this. See jenkins/README.md.
 
-   The pipeline is triggered by a GitHub webhook (Settings -> Webhooks ->
-   <jenkins-url>/github-webhook/). `githubPush()` below wires that up.
+   Triggers (both declared below):
+     - githubPush()  fires on a GitHub push IF Jenkins is reachable by the webhook
+                     (needs a public URL — e.g. smee.io/ngrok for a local Jenkins).
+     - pollSCM       a local-friendly fallback: Jenkins checks the repo for new
+                     commits on a schedule, so a push still triggers a build even
+                     when GitHub can't reach your laptop.
    ============================================================================ */
 
 pipeline {
   agent any
 
   options {
-    timestamps()
     disableConcurrentBuilds()
   }
 
   triggers {
-    githubPush()            // run automatically on every GitHub push
+    githubPush()
+    pollSCM('H/2 * * * *')   // every ~2 minutes; remove if you wire up the webhook
   }
 
   environment {
     IMAGE        = 'streamz'
+    TEST_IMAGE   = 'streamz-tests'
     TAG          = "build-${env.BUILD_NUMBER}"
     CONTAINER    = 'streamz'
     PORT         = '3000'
-    PW_IMAGE     = 'mcr.microsoft.com/playwright:v1.49.0-jammy'
     E2E_APP      = 'streamz-e2e'
     E2E_NET      = 'streamz-e2e-net'
+    TEST_RUNNER  = "streamz-tests-${env.BUILD_NUMBER}"
   }
 
   stages {
@@ -44,40 +50,51 @@ pipeline {
       }
     }
 
-    /* 2a) TEST — unit + API + integration + smoke run inside the app image.
-            These need no browser, so they run fast in the freshly built image. */
-    stage('Unit / API / Integration / Smoke Tests') {
-      steps {
-        sh 'docker run --rm $IMAGE:$TAG npm run test:node'
-      }
-    }
-
-    /* 2b) TEST — E2E in a real browser using the official Playwright image,
-            pointed at the app running in its own container. */
-    stage('E2E Tests') {
+    /* 2) TEST — ALL levels (unit/api/integration/smoke/e2e) run on the Playwright
+            runner, inside a purpose-built test image, against the app running in
+            its own container. We do NOT bind-mount the workspace (unreliable when
+            Jenkins is itself a container); instead we `docker cp` the artifacts
+            out of the test container afterwards. */
+    stage('Test (Playwright: unit/api/integration/smoke/e2e)') {
       steps {
         sh '''
           set -e
-          docker rm -f $E2E_APP >/dev/null 2>&1 || true
+          docker rm -f $E2E_APP $TEST_RUNNER >/dev/null 2>&1 || true
           docker network create $E2E_NET >/dev/null 2>&1 || true
 
-          # Start the app under test on the private E2E network.
+          # Build the test image (Playwright browsers + our specs baked in).
+          docker build -f Dockerfile.test -t $TEST_IMAGE:$TAG .
+
+          # Start the app under test on a private network.
           docker run -d --name $E2E_APP --network $E2E_NET $IMAGE:$TAG
 
-          # Run Playwright against it. BASE_URL disables the config's webServer.
-          docker run --rm --network $E2E_NET \
-            -e BASE_URL=http://$E2E_APP:3000 \
-            -e CI=true \
-            -v "$PWD":/work -w /work \
-            $PW_IMAGE \
-            bash -lc "npm install && npx playwright test"
+          # Run the suite against it. Capture the exit code so we can still copy
+          # artifacts out before failing the stage.
+          set +e
+          docker run --name $TEST_RUNNER --network $E2E_NET \
+            -e BASE_URL=http://$E2E_APP:3000 -e CI=true \
+            $TEST_IMAGE:$TAG
+          TEST_EXIT=$?
+          set -e
+
+          # Pull the report + raw artifacts (traces, videos, screenshots) into the
+          # Jenkins workspace so archiveArtifacts can pick them up.
+          rm -rf playwright-report test-results
+          docker cp $TEST_RUNNER:/work/playwright-report ./playwright-report 2>/dev/null || true
+          docker cp $TEST_RUNNER:/work/test-results ./test-results 2>/dev/null || true
+
+          exit $TEST_EXIT
         '''
       }
       post {
         always {
-          sh 'docker rm -f $E2E_APP >/dev/null 2>&1 || true'
-          sh 'docker network rm $E2E_NET >/dev/null 2>&1 || true'
-          archiveArtifacts artifacts: 'playwright-report/**', allowEmptyArchive: true
+          sh '''
+            docker rm -f $TEST_RUNNER >/dev/null 2>&1 || true
+            docker rm -f $E2E_APP >/dev/null 2>&1 || true
+            docker network rm $E2E_NET >/dev/null 2>&1 || true
+          '''
+          // Archive the HTML report AND the raw artifacts (traces, videos, screenshots).
+          archiveArtifacts artifacts: 'playwright-report/**, test-results/**', allowEmptyArchive: true
         }
       }
     }

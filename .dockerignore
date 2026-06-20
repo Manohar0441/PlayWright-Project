@@ -6,4 +6,5 @@ playwright/.cache
 .git
 .gitignore
 Jenkinsfile
+jenkins
 *.md

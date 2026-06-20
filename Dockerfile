@@ -24,7 +24,8 @@ ENV PORT=3000
 EXPOSE 3000
 
 # Container-level health check the orchestrator (and our deploy script) can read.
-HEALTHCHECK --interval=10s --timeout=3s --start-period=3s --retries=5 \
+# Short interval so a deploy reports healthy within a few seconds.
+HEALTHCHECK --interval=5s --timeout=3s --start-period=2s --retries=5 \
   CMD curl -fsS http://localhost:3000/api/health || exit 1
 
 ENTRYPOINT ["/sbin/tini", "--"]

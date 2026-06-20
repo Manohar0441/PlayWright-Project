@@ -6,18 +6,18 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "npm run test:node",
-    "test:node": "node --test \"tests/**/*.test.js\"",
-    "test:unit": "node --test \"tests/unit/**/*.test.js\"",
-    "test:api": "node --test \"tests/api/**/*.test.js\"",
-    "test:integration": "node --test \"tests/integration/**/*.test.js\"",
-    "test:smoke": "node --test \"tests/smoke/**/*.test.js\"",
-    "test:e2e": "playwright test"
+    "test": "playwright test",
+    "test:unit": "playwright test --project=unit",
+    "test:api": "playwright test --project=api",
+    "test:integration": "playwright test --project=integration",
+    "test:smoke": "playwright test --project=smoke",
+    "test:e2e": "playwright test --project=e2e",
+    "test:report": "playwright show-report"
   },
   "engines": {
     "node": ">=18.19"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0"
+    "@playwright/test": "1.61.0"
   }
 }

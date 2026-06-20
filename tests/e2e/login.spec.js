@@ -8,7 +8,7 @@
        npm run test:e2e        (or: npx playwright test)
    ============================================================================ */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('../fixtures');
 
 const QA = { email: 'qa@streamz.test', password: 'Test@123' };
 

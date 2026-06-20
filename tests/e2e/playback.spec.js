@@ -5,9 +5,15 @@
    `data-state` (the single source of truth documented in the README). The
    resume test also uses the `window.__player` test hook for a raw read of the
    simulated timeline.
+
+   NOTE on the locator: we click the control-bar button by its test id
+   (`play-pause`) rather than getByRole(name: 'Play'). When a title has no saved
+   progress the player shows a big "▶" start-overlay button that ALSO has
+   aria-label "Play", so the role locator would be ambiguous. The test id is
+   unambiguous and works in every player state.
    ============================================================================ */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('../fixtures');
 
 /* Log in through the UI so the session token exists in localStorage. */
 async function login(page) {
@@ -25,10 +31,10 @@ test('play then pause toggles the player state', async ({ page }) => {
   // Wait until the player has loaded its title (state is no longer "loading").
   await expect(page.getByTestId('player')).not.toHaveAttribute('data-state', 'loading');
 
-  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByTestId('play-pause').click();   // play
   await expect(page.getByTestId('player')).toHaveAttribute('data-state', 'playing');
 
-  await page.getByRole('button', { name: 'Pause' }).click();
+  await page.getByTestId('play-pause').click();   // pause
   await expect(page.getByTestId('player')).toHaveAttribute('data-state', 'paused');
 });
 
@@ -46,7 +52,7 @@ test('resumes roughly where you left off after a reload', async ({ page }) => {
   await expect(page.getByTestId('player')).not.toHaveAttribute('data-state', 'loading');
 
   // Start playing and let the simulated clock advance a few seconds.
-  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByTestId('play-pause').click();
   await expect(page.getByTestId('player')).toHaveAttribute('data-state', 'playing');
   await page.waitForFunction(() => window.__player.currentTime > 4);
   const before = await page.evaluate(() => window.__player.currentTime);
