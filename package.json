@@ -12,6 +12,10 @@
     "test:integration": "playwright test --project=integration",
     "test:smoke": "playwright test --project=smoke",
     "test:e2e": "playwright test --project=e2e",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:e2e:headed": "playwright test --project=e2e --headed",
+    "test:debug": "playwright test --debug",
     "test:report": "playwright show-report"
   },
   "engines": {

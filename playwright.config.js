@@ -46,6 +46,9 @@ module.exports = defineConfig({
     screenshot: 'on',            // every test
     video: 'retain-on-failure',  // failures only
     trace: 'on',                 // every test
+    // Optional slow-motion so you can WATCH each action when running --headed.
+    // e.g.  SLOWMO=800 npm run test:e2e:headed
+    launchOptions: { slowMo: Number(process.env.SLOWMO) || 0 },
   },
 
   // One project per test level. They all inherit the artifact settings above.

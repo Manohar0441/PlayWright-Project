@@ -49,21 +49,11 @@ pipeline {
           # Start the app under test on a private network.
           docker run -d --name $E2E_APP --network $E2E_NET $IMAGE:$TAG
 
-          # Run the suite against it. Capture the exit code so we can still copy
-          # artifacts out before failing the stage.
           set +e
           docker run --name $TEST_RUNNER --network $E2E_NET \
             -e BASE_URL=http://$E2E_APP:3000 -e CI=true \
             $TEST_IMAGE:$TAG
           TEST_EXIT=$?
-          set -e
-
-          # Pull the report + raw artifacts (traces, videos, screenshots) into the
-          # Jenkins workspace so archiveArtifacts can pick them up.
-          rm -rf playwright-report test-results
-          docker cp $TEST_RUNNER:/work/playwright-report ./playwright-report 2>/dev/null || true
-          docker cp $TEST_RUNNER:/work/test-results ./test-results 2>/dev/null || true
-
           exit $TEST_EXIT
         '''
       }
